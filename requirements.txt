@@ -76,7 +76,7 @@ jupyterlab-widgets==3.0.9
 jupyterlab_code_formatter==2.2.1
 jupyterlab_server==2.25.1
 kaleido==0.2.1
-lightgbm==4.1.0
+lightgbm==4.6.0
 llvmlite==0.41.1
 locket==1.0.0
 lxml==4.9.3
