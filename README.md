@@ -1,9 +1,10 @@
 # s2-polars-data-analysis 3.0.0
 Starcraft 2 - Polars - Data Analysis Jupyter Notebooks
 
-[Latest Replay Unit Born including creator ability in Map](https://sebosp.github.io/s2-polars-data-analysis/jupyter_notebooks/static/latest_map_unit_born.html)
-[Latest Replay Map Unit Died in Map](https://sebosp.github.io/s2-polars-data-analysis/jupyter_notebooks/static/latest_map_unit_died.html)
-[Latest Replay Unit Killer to Unit Died Frequency](https://sebosp.github.io/s2-polars-data-analysis/jupyter_notebooks/static/latest_map_unit_killer_to_died_freq.html)
+Example generated reports using the Basic-Unit-Queries
+- [Latest Replay Unit Born including creator ability in Map](https://sebosp.github.io/s2-polars-data-analysis/jupyter_notebooks/static/latest_map_unit_born.html)
+- [Latest Replay Map Unit Died in Map](https://sebosp.github.io/s2-polars-data-analysis/jupyter_notebooks/static/latest_map_unit_died.html)
+- [Latest Replay Unit Killer to Unit Died Frequency](https://sebosp.github.io/s2-polars-data-analysis/jupyter_notebooks/static/latest_map_unit_killer_to_died_freq.html)
 
 ## Compat
 The releases in this repo major version are compatible with the s2protocol-rs major versions
@@ -14,7 +15,7 @@ The releases in this repo major version are compatible with the s2protocol-rs ma
 $ virtualenv new venv
 $ source ./venv/bin/activate
 $ pip install -r requirements.txt
-$ jupyter lab
+$ jupyter lab --ip 0.0.0.0
 ```
 
 Then open your browser and locate the Notebbooks, for example:
