@@ -6,3 +6,6 @@ polars_ds==0.8.2
 functime==0.9.3
 PyWavelets==1.8.0
 anywidget==0.9.18
+cufflinks==0.17.3
+seaborn==0.13.2
+chart-studio==1.1.0
