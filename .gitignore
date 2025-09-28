@@ -1,3 +1,3 @@
 ipcs/
-
+.venv
 jupyter_notebooks/.ipynb_checkpoints/
