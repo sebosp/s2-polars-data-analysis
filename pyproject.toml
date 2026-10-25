@@ -8,7 +8,7 @@ dependencies = [
     "duckdb[all]>=1.5.2",
     "functime==1.0.0",
     "jupyter==1.1.1",
-    "jupyterlab==4.5.7",
+    "jupyterlab==4.5.11",
     "plotly-express==0.4.1",
     "polars[pyarrow]==1.40.0",
     "polars-ds==0.11.2",
