@@ -62,8 +62,9 @@ def scan(ipc_dir: str, name: str) -> pl.LazyFrame:
 def game_seconds(loop_col: str = "ext_replay_loop") -> pl.Expr:
     """The game time in seconds at Faster speed.
 
-    The `ext_replay_seconds` column is computed by s2protocol-rs with 68.58 ms per loop, about
-    14.6 loops per second instead of 22.4, use this one instead.
+    The `ext_replay_seconds` column of the snapshots written by s2protocol-rs 4.0.0 and older is
+    computed with 68.58 ms per loop, about 14.6 loops per second instead of 22.4, this one is
+    right for every snapshot.
     """
     return (pl.col(loop_col) / GAME_LOOPS_PER_SECOND).alias("game_seconds")
 
@@ -71,6 +72,16 @@ def game_seconds(loop_col: str = "ext_replay_loop") -> pl.Expr:
 def name_without_clan(col: str = "player_name") -> pl.Expr:
     """The player name without the clan tag, i.e. `&lt;TAG&gt;<sp/>Serral` is `Serral`."""
     return pl.col(col).str.split("<sp/>").list.last()
+
+
+# The prefixes of the sprays, rewards, etc. They are upgrades in the tracker events but not part
+# of the build orders.
+COSMETIC_UPGRADE_PREFIXES = ["Spray", "Reward", "GameHeart"]
+
+
+def is_cosmetic_upgrade(col: str = "name") -> pl.Expr:
+    """Whether the upgrade is a spray, a reward, etc, i.e. `upgrades.filter(~is_cosmetic_upgrade())`."""
+    return pl.any_horizontal(pl.col(col).str.starts_with(prefix) for prefix in COSMETIC_UPGRADE_PREFIXES)
 
 
 def race_letter(col: str = "player_race") -> pl.Expr:
@@ -136,4 +147,23 @@ def one_vs_one(ipc_dir: str) -> pl.LazyFrame:
         players_lf.join(opponents, on="ext_fs_id")
         .filter(pl.col("player_id") != pl.col("opponent_id"))
         .with_columns(pl.concat_str("race", pl.lit("v"), "opponent_race").alias("matchup"))
+    )
+
+
+def casts(ipc_dir: str) -> pl.LazyFrame:
+    """One row per ability command of both cmd files, i.e. a Psionic Storm or an Inject.
+
+    The cmd files have one row per unit selected when the command was given, a Storm commanded
+    with four High Templar selected is four rows. The `sequence` numbers the commands of each
+    player, a command is counted once by it. The commands are not always cast, a Storm can be
+    cancelled before the High Templar is in range.
+    """
+    columns = ["ext_fs_id", "user_id", "player_name", "ability", "ext_replay_loop", "sequence"]
+    return (
+        pl.concat(
+            [scan(ipc_dir, "cmd_target_point").select(columns), scan(ipc_dir, "cmd_target_unit").select(columns)]
+        )
+        .filter(pl.col("ability") != "")
+        .unique(["ext_fs_id", "user_id", "sequence", "ext_replay_loop"])
+        .with_columns(pl.col("ability").str.split(".").list.first().alias("ability_name"))
     )
