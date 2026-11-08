@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    name: Tests, SQL against polars, notebooks
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.7"
+          enable-cache: true
+      # A snapshot of s2protocol-rs 5.1.0 of 142 games: 130 1v1 of eight players over 41 months and
+      # 12 games against the Cheater AI, 40 MB, kept as the asset of a release, not in git.
+      - name: Download the test snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download test-snapshot-5.1.0 --pattern ipcs.tar.zst --dir "$RUNNER_TEMP"
+          tar --zstd -xf "$RUNNER_TEMP/ipcs.tar.zst" -C "$RUNNER_TEMP"
+      - name: Install the dependencies
+        run: uv sync --locked
+      - name: Check
+        env:
+          S2_IPC_DIR: ${{ runner.temp }}/ipcs
+          # The minimum games of the queries, scaled to a snapshot of 142 games.
+          S2_MIN_SCALE: "0.1"
+        run: scripts/ci.sh

@@ -24,7 +24,7 @@ monthly AS (
     SELECT 'minutes', matchup, date_trunc('month', ext_datetime), count(*), median(minutes)
     FROM games GROUP BY ALL
 ),
-kept AS (SELECT * FROM monthly WHERE games >= 10 AND entity <> '?')
+kept AS (SELECT * FROM monthly WHERE games >= at_least(10) AND entity <> '?')
 SELECT
     series, entity, month, games, value,
     date_diff('month', min(month) OVER (PARTITION BY series, entity), month) AS t

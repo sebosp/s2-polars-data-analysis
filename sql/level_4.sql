@@ -19,7 +19,7 @@ SELECT
 FROM games_1v1 g
 JOIN level_4.main_race m USING (player)
 GROUP BY g.player
-HAVING count(*) >= 30
+HAVING count(*) >= at_least(30)
 ORDER BY games DESC, g.player;
 
 -- @query vs_race frame=vs_race

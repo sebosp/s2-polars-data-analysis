@@ -151,8 +151,9 @@ FULL_GAME_SECONDS = 600
 full_ids = games.filter(pl.col("duration") >= FULL_GAME_SECONDS)["ext_fs_id"].to_list()
 print(f"{games.height} games, {games['result'].eq('Win').mean():.1%} won, "
       f"from {games['ext_datetime'].min():%Y-%m-%d} to {games['ext_datetime'].max():%Y-%m-%d}")
-print(f"{games.height - len(full_ids)} games ended before 10:00, "
-      f"{games.filter(pl.col('duration') < FULL_GAME_SECONDS)['result'].eq('Win').mean():.0%} of them won")
+short = games.filter(pl.col("duration") < FULL_GAME_SECONDS)
+if short.height:
+    print(f"{short.height} games ended before 10:00, {short['result'].eq('Win').mean():.0%} of them won")
 games.head()
 """)
 
@@ -511,7 +512,7 @@ fig.show()
 md(r"""
 ## Actions
 
-The commands of the main player, from both cmd files, a command once (see `s2.casts`), and the
+The commands of the main player, from the three cmd files, a command once (see `s2.casts`), and the
 abilities that need attention: Inject Larva, Creep Tumors and Transfuse. They are counted in the
 first 10 minutes of the games that reached 10:00, so that the long games do not count more and
 the games left early do not count less.
