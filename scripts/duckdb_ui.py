@@ -2,18 +2,14 @@
 
     S2_IPC_DIR=~/SC2Replays/ipcs uv run python scripts/duckdb_ui.py
 
-It copies the snapshot in `$S2_IPC_DIR` into `data/snapshot.duckdb` and opens the UI on
+It creates `data/snapshot.duckdb` with a view over the files of each table and opens the UI on
 http://localhost:4213. In a UI notebook cell: `FROM examples`, `FROM level_2.balance`. On another
 machine use `--no-browser` and `ssh -L 4213:localhost:4213 <machine>`.
 
-Why a copy, when `s2.duck()` reads the files directly: the UI has its own connections, which do
-not see the pyarrow datasets of Python, and the `read_arrow` of DuckDB, up to 2.0.0, does not read
-the `string_view` columns of s2protocol-rs 5.1.0. When `read_arrow` can read them, plain views over
-the files replace `copy_snapshot()`.
-
-The copy is refreshed when this runs and the `created_at` of the snapshot changed, `--refresh`
-forces it. The tables and views you add to the database stay. It holds native tables, so it also
-opens without this script: `duckdb data/snapshot.duckdb -ui`.
+The views read the snapshot with `read_arrow`, they take no space. `--copy` copies it into native
+tables instead, 5 GB for 36,394 replays and faster when the queries scan the event tables often.
+The tables and views you add to the database stay. To open it without this script, load the
+extension first: `duckdb data/snapshot.duckdb -ui -cmd "LOAD arrow"`.
 """
 
 import argparse
@@ -56,35 +52,47 @@ def snapshot_id(ipc_dir: str) -> str:
     return f"{Path(ipc_dir).expanduser()} {metadata['created_at']}"
 
 
-def copy_snapshot(con: duckdb.DuckDBPyConnection, ipc_dir: str) -> None:
-    """Copies the files of the snapshot into native tables, and the player tables from them."""
+def drop_snapshot(con: duckdb.DuckDBPyConnection, ipc_dir: str) -> None:
+    """Removes the tables and views of the snapshot, of any previous way of building the database."""
     objects = con.execute(
         "SELECT table_name, table_type FROM information_schema.tables WHERE table_schema = 'main'"
     ).fetchall()
+    names = [*s2.snapshot_tables(ipc_dir), "players", "player_ids", "games_1v1", "games", "casts"]
     for name, kind in objects:
-        if name in ["players", "games_1v1", "games", "casts"]:
+        if name in names:
             con.execute(f"DROP {'VIEW' if kind == 'VIEW' else 'TABLE'} {name}")
-    for name in s2.FILES:
-        source = s2.dataset(ipc_dir, name)
-        con.execute(f"CREATE OR REPLACE TABLE {name} AS FROM source")
+
+
+def copy_snapshot(con: duckdb.DuckDBPyConnection, ipc_dir: str) -> None:
+    """Copies the files of the snapshot into native tables, and the player tables from them."""
+    for name, source in s2.snapshot_tables(ipc_dir).items():
+        con.execute(f"CREATE TABLE {name} AS FROM {source}")
     s2.create_views(con)
     s2.materialize_players(con)
 
 
-def build(ipc_dir: str, db: Path, memory_limit: str = "12GB", refresh: bool = False) -> duckdb.DuckDBPyConnection:
+def build(
+    ipc_dir: str, db: Path, memory_limit: str = "12GB", refresh: bool = False, copy: bool = False
+) -> duckdb.DuckDBPyConnection:
     """Creates the database, or refreshes it when the snapshot changed, and writes the examples."""
     db.parent.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect(str(db))
     s2.configure(con, memory_limit)
+    s2.load_arrow(con)
     # A database built before the list of examples became a view.
     if con.execute("SELECT count(*) FROM duckdb_tables() WHERE schema_name = 'main' AND table_name = 'examples'").fetchone()[0]:
         con.execute("DROP TABLE examples")
     con.execute("CREATE TABLE IF NOT EXISTS snapshot_info (id VARCHAR)")
-    current = snapshot_id(ipc_dir)
+    current = f"{snapshot_id(ipc_dir)} {'copy' if copy else 'views'}"
     if refresh or con.execute("SELECT count(*) FROM snapshot_info WHERE id = ?", [current]).fetchone()[0] == 0:
         # One transaction: an interrupted copy leaves the database as it was.
         con.begin()
-        copy_snapshot(con, ipc_dir)
+        drop_snapshot(con, ipc_dir)
+        if copy:
+            copy_snapshot(con, ipc_dir)
+        else:
+            s2.link_files(con, ipc_dir)
+            s2.create_views(con)
         con.execute("DELETE FROM snapshot_info")
         con.execute("INSERT INTO snapshot_info VALUES (?)", [current])
         con.commit()
@@ -112,13 +120,14 @@ def main() -> None:
     parser.add_argument("--snapshot", default=s2.ipc_dir(), help="the ipcs directory, default $S2_IPC_DIR or ~/SC2Replays/ipcs")
     parser.add_argument("--db", type=Path, default=DEFAULT_DB, help=f"the database to build, default {DEFAULT_DB}")
     parser.add_argument("--memory-limit", default="12GB")
-    parser.add_argument("--refresh", action="store_true", help="copy the snapshot again even if it did not change")
+    parser.add_argument("--refresh", action="store_true", help="read the snapshot again even if it did not change")
+    parser.add_argument("--copy", action="store_true", help="native tables instead of views over the files")
     parser.add_argument("--no-browser", action="store_true", help="start the server only")
     parser.add_argument("--build-only", action="store_true", help="build the database and exit")
     args = parser.parse_args()
 
     started = time.time()
-    con = build(args.snapshot, args.db, args.memory_limit, args.refresh)
+    con = build(args.snapshot, args.db, args.memory_limit, args.refresh, args.copy)
     games = con.execute("SELECT count(*) FROM games").fetchone()[0]
     examples = con.execute("SELECT count(*) FROM examples").fetchone()[0]
     print(f"{args.db}: {examples} examples, {games} 1v1 games from {args.snapshot}, built in {time.time() - started:.0f} s")

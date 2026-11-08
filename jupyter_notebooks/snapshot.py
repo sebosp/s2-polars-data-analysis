@@ -12,6 +12,10 @@ played, one directory per day with all the files:
 The replays are identified by `ext_fs_id`, unique in the snapshot. Older snapshots have the files
 at the root of `ipcs/`, `scan()` reads both layouts.
 
+Since s2protocol-rs 5.1.0 the snapshot also has its aggregations, computed once by the writer: a
+row per game in each day (`GAME_TABLES`) and the same usage tables per day, month and year
+(`USAGE_TABLES`). They answer most questions without the hundreds of millions of event rows.
+
 Usage from a notebook in this directory:
 
     import snapshot as s2
@@ -26,8 +30,6 @@ from pathlib import Path
 
 import duckdb
 import polars as pl
-import pyarrow as pa
-import pyarrow.dataset as ds
 from polars.testing import assert_frame_equal
 
 # A snapshot can be larger than the memory, a query over unit_born with the in-memory engine takes
@@ -44,6 +46,12 @@ FILES = [
     "cmd_target_point",
     "cmd_target_unit",
 ]
+
+# The aggregations of s2protocol-rs 5.1.0: a row per game, in the directory of each day.
+GAME_TABLES = ["game_abilities", "game_units", "game_players", "game_minutes"]
+# A row per period, protocol version, race, player and ability or unit, in each day, month and year.
+USAGE_TABLES = ["ability_usage", "unit_usage", "player_usage"]
+USAGE_GLOBS = {"day": "year=*/month=*/day=*", "month": "year=*/month=*", "year": "year=*"}
 
 # The game loops per second at "Faster" speed, the speed of the ladder and the tournaments.
 GAME_LOOPS_PER_SECOND = 22.4
@@ -89,6 +97,20 @@ def scan(ipc_dir: str, name: str) -> pl.LazyFrame:
         return pl.scan_ipc(flat)
     # The year, month and day are not added as columns, `ext_datetime` of the details has the date.
     return pl.scan_ipc(root / f"year=*/month=*/day=*/{name}.arrow", hive_partitioning=False)
+
+
+def usage(ipc_dir: str, name: str, grain: str = "month") -> pl.LazyFrame:
+    """A usage table per `day`, `month` or `year`, i.e. `usage(ipc_dir, "ability_usage", "year")`.
+
+    `period` is `2026-10-15`, `2026-10` or `2026`. All the columns add up, a year is its months.
+    """
+    root = Path(ipc_dir).expanduser()
+    return pl.scan_ipc(root / f"{USAGE_GLOBS[grain]}/{name}.arrow", hive_partitioning=False)
+
+
+def has_aggregations(ipc_dir: str) -> bool:
+    """Whether the snapshot was written by s2protocol-rs 5.1.0 or later."""
+    return bool(glob.glob(str(Path(ipc_dir).expanduser() / "year=*/month=*/day=*/game_players.arrow")))
 
 
 def peek(lf: pl.LazyFrame, n: int = 5) -> pl.DataFrame:
@@ -166,15 +188,19 @@ def players(ipc_dir: str) -> pl.LazyFrame:
     """One row per player of every game, with its tracker `player_id`.
 
     The tracker events (stats, upgrades, unit_born, unit_died) identify the player by `player_id`
-    (`control_player_id`, `killer_player_id`), the details by name. The unit_born events have
-    both, so they map one to the other.
+    (`control_player_id`, `killer_player_id`), the details by name. The `game_players`
+    aggregation maps one to the other; the snapshots before 5.1.0 scan the unit_born events, which
+    have both.
     """
-    ids = (
-        scan(ipc_dir, "unit_born")
-        .filter(pl.col("player_name").is_not_null())
-        .select("ext_fs_id", pl.col("control_player_id").alias("player_id"), "player_name")
-        .unique()
-    )
+    if has_aggregations(ipc_dir):
+        ids = scan(ipc_dir, "game_players").select("ext_fs_id", "player_id", "player_name")
+    else:
+        ids = (
+            scan(ipc_dir, "unit_born")
+            .filter(pl.col("player_name").is_not_null())
+            .select("ext_fs_id", pl.col("control_player_id").alias("player_id"), "player_name")
+            .unique()
+        )
     details = scan(ipc_dir, "details").filter(pl.col("player_observe") == 0)
     return details.join(ids, on=["ext_fs_id", "player_name"], how="inner").select(
         "ext_fs_id",
@@ -248,10 +274,11 @@ def games(ipc_dir: str) -> pl.LazyFrame:
 def casts(ipc_dir: str) -> pl.LazyFrame:
     """One row per ability command of both cmd files, i.e. a Psionic Storm or an Inject.
 
-    The cmd files have one row per unit selected when the command was given, a Storm commanded
-    with four High Templar selected is four rows. The `sequence` numbers the commands of each
-    player, a command is counted once by it. The commands are not always cast, a Storm can be
-    cancelled before the High Templar is in range.
+    Since s2protocol-rs 5.1.0 a row of the cmd files is a command, `selection_size` has the units
+    selected. Before it was a row per unit selected, a Storm commanded with four High Templar was
+    four rows: the `sequence` numbers the commands of each player, it counts them once in both.
+    The commands are not always cast, a Storm can be cancelled before the High Templar is in range.
+    To count the commands per game, `scan(ipc_dir, "game_abilities")` has them already.
     """
     columns = ["ext_fs_id", "user_id", "player_name", "ability", "ext_replay_loop", "sequence"]
     return (
@@ -268,13 +295,16 @@ def casts(ipc_dir: str) -> pl.LazyFrame:
 # DuckDB: the same snapshot as SQL views, for the SQL twin of every polars query.
 # ---------------------------------------------------------------------------------------------
 
+# The tracker id of each player, see `s2.players()`.
+PLAYER_IDS_SQL = "SELECT ext_fs_id, player_id, player_name FROM game_players"
+PLAYER_IDS_BORN_SQL = """
+    SELECT DISTINCT ext_fs_id, control_player_id AS player_id, player_name
+    FROM unit_born
+    WHERE player_name IS NOT NULL
+"""
+
 # `s2.players()` and `s2.one_vs_one()` as SQL, the same rows.
 PLAYERS_SQL = """
-    WITH ids AS (
-        SELECT DISTINCT ext_fs_id, control_player_id AS player_id, player_name
-        FROM unit_born
-        WHERE player_name IS NOT NULL
-    )
     SELECT
         d.ext_fs_id,
         ids.player_id,
@@ -288,7 +318,7 @@ PLAYERS_SQL = """
         d.ext_datetime,
         d.ext_protocol_version
     FROM details d
-    JOIN ids USING (ext_fs_id, player_name)
+    JOIN player_ids ids USING (ext_fs_id, player_name)
     LEFT JOIN races r ON r.race = d.player_race
     WHERE d.player_observe = 0
 """
@@ -350,14 +380,14 @@ CASTS_SQL = """
 
 
 def duck(ipc_dir: str, memory_limit: str = "12GB", materialize: bool = False) -> duckdb.DuckDBPyConnection:
-    """A DuckDB connection with one table per file of the snapshot, plus the views `races`,
+    """A DuckDB connection with one view per file of the snapshot, plus the views `races`,
     `structures`, `players`, `games_1v1`, `games` and `casts`, and the macro `game_seconds`:
-    `con.sql("SELECT title, count(*) FROM details GROUP BY ALL")`.
+    `con.sql("SELECT title, count(*) FROM details GROUP BY ALL")`. The usage tables are per grain,
+    `ability_usage_month`, `unit_usage_year`...
 
-    The files are registered as pyarrow datasets, read when a query needs them, with the filters
-    and the columns pushed down. The `arrow` community extension of DuckDB cannot read the
-    `string_view` columns that s2protocol-rs writes since 5.1.0. The connection also sees the
-    polars frames of the notebook by their variable names (`con.sql("FROM my_frame")`).
+    The views read the files with `read_arrow`, the `arrow` community extension, with the filters
+    and the columns pushed down. The connection also sees the polars frames of the notebook by
+    their variable names (`con.sql("FROM my_frame")`).
 
     DuckDB spills to disk above `memory_limit`, its default of 80% of the memory is too much next
     to polars in the same process. `materialize` keeps the player tables in memory, for many
@@ -365,24 +395,41 @@ def duck(ipc_dir: str, memory_limit: str = "12GB", materialize: bool = False) ->
     """
     con = duckdb.connect()
     configure(con, memory_limit)
-    for name in FILES:
-        con.register(name, dataset(ipc_dir, name))
+    link_files(con, ipc_dir)
     create_views(con)
     if materialize:
         materialize_players(con)
     return con
 
 
-def dataset(ipc_dir: str, name: str) -> ds.Dataset:
-    """A file of the snapshot as a pyarrow dataset, for DuckDB.
+def load_arrow(con: duckdb.DuckDBPyConnection) -> None:
+    """Loads `read_arrow`, the extension is downloaded the first time."""
+    con.execute("INSTALL arrow FROM community; LOAD arrow;")
 
-    The `string_view` columns are read as `string`: pyarrow cannot compare the two when DuckDB
-    pushes a filter down, "no kernel matching input types (string_view, string)".
-    """
-    files = sorted(glob.glob(arrow_files(ipc_dir, name)))
-    schema = ds.dataset(files, format="ipc").schema
-    strings = pa.schema([f.with_type(pa.string()) if pa.types.is_string_view(f.type) else f for f in schema])
-    return ds.dataset(files, format="ipc", schema=strings)
+
+def read_arrow_sql(ipc_dir: str, name: str, grain: str = "day") -> str:
+    """The file of every period as SQL, i.e. `read_arrow('.../year=*/month=*/day=*/stats.arrow')`."""
+    root = Path(ipc_dir).expanduser()
+    files = root / f"{name}.arrow" if (root / f"{name}.arrow").exists() else root / f"{USAGE_GLOBS[grain]}/{name}.arrow"
+    return f"read_arrow('{files}')"
+
+
+def snapshot_tables(ipc_dir: str) -> dict[str, str]:
+    """The tables of the snapshot by their name in DuckDB, with the SQL that reads each one."""
+    tables = {name: read_arrow_sql(ipc_dir, name) for name in FILES}
+    if has_aggregations(ipc_dir):
+        tables |= {name: read_arrow_sql(ipc_dir, name) for name in GAME_TABLES}
+        tables |= {
+            f"{name}_{grain}": read_arrow_sql(ipc_dir, name, grain) for name in USAGE_TABLES for grain in USAGE_GLOBS
+        }
+    return tables
+
+
+def link_files(con: duckdb.DuckDBPyConnection, ipc_dir: str) -> None:
+    """Creates a view over the files of each table of the snapshot."""
+    load_arrow(con)
+    for name, source in snapshot_tables(ipc_dir).items():
+        con.execute(f"CREATE OR REPLACE VIEW {name} AS FROM {source}")
 
 
 def configure(con: duckdb.DuckDBPyConnection, memory_limit: str = "12GB") -> None:
@@ -392,12 +439,14 @@ def configure(con: duckdb.DuckDBPyConnection, memory_limit: str = "12GB") -> Non
 
 
 def create_views(con: duckdb.DuckDBPyConnection) -> None:
-    """The views over the snapshot files, which must already be tables or registered datasets."""
+    """The views over the snapshot files, which must already be tables or views."""
     races = ", ".join(f"('{race}', '{letter}')" for race, letter in RACES.items())
     con.execute(f"CREATE OR REPLACE VIEW races AS SELECT * FROM (VALUES {races}) AS t(race, letter)")
     structures = ", ".join(f"('{name}', '{race}')" for race, names in STRUCTURES.items() for name in names)
     con.execute(f"CREATE OR REPLACE VIEW structures AS SELECT * FROM (VALUES {structures}) AS t(name, race)")
     con.execute(f"CREATE OR REPLACE MACRO game_seconds(loop) AS loop / {GAME_LOOPS_PER_SECOND}")
+    names = {row[0] for row in con.execute("SELECT table_name FROM information_schema.tables").fetchall()}
+    con.execute(f"CREATE OR REPLACE VIEW player_ids AS {PLAYER_IDS_SQL if 'game_players' in names else PLAYER_IDS_BORN_SQL}")
     con.execute(f"CREATE OR REPLACE VIEW players AS {PLAYERS_SQL}")
     con.execute(f"CREATE OR REPLACE VIEW games_1v1 AS {GAMES_1V1_SQL}")
     con.execute(f"CREATE OR REPLACE VIEW casts AS {CASTS_SQL}")

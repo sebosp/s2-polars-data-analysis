@@ -25,7 +25,7 @@ Without `S2_IPC_DIR` the notebooks read `~/SC2Replays/ipcs`. The snapshot is wri
 and the s2protocol-rs README:
 
 ```
-$ cargo run --example full -r --no-default-features --features=dep_arrow,tracing_off -- \
+$ cargo run --example full -r --no-default-features --features=dep_arrow,dep_tokio,tracing_off -- \
     -v error --timing --source ~/SC2Replays --output ~/SC2Replays/ipcs --cache-path ~/SC2Replays/swarmy \
     write-arrow-ipc --process-max-files 1000000
 ```
@@ -39,15 +39,12 @@ a notebook in the browser, with one command:
 $ S2_IPC_DIR=~/SC2Replays/ipcs uv run python scripts/duckdb_ui.py
 ```
 
-It copies the snapshot of `S2_IPC_DIR` into `data/snapshot.duckdb` and opens
+It creates `data/snapshot.duckdb` with a view over the files of each table and opens
 http://localhost:4213. On another machine add `--no-browser` and connect with
-`ssh -L 4213:localhost:4213 <machine>`. The copy of 36,394 replays takes 5.3 GB. Running the
-command again reuses it unless the snapshot was rewritten, `--refresh` forces a new copy. The file
-holds native tables, so later it also opens with the DuckDB CLI: `duckdb data/snapshot.duckdb -ui`.
-
-Only the UI needs this copy. The notebooks, `s2.duck()` and the examples below read the snapshot
-files directly. The UI cannot, for now: its connections do not see the datasets of Python, and
-`read_arrow`, up to DuckDB 2.0.0, does not read the `string_view` columns of s2protocol-rs 5.1.0.
+`ssh -L 4213:localhost:4213 <machine>`. The views take no space, `--copy` copies the snapshot into
+native tables instead, about 5 GB for 36,394 replays and faster for queries that scan the event
+tables often. To open the database later with the DuckDB CLI, load the extension first:
+`duckdb data/snapshot.duckdb -ui -cmd "LOAD arrow"`.
 
 In a new notebook cell, `FROM examples` lists all the queries, each one is a view:
 
@@ -86,6 +83,8 @@ $ S2_IPC_DIR=~/SC2Replays/ipcs uv run python examples/duckdb_examples.py asof_jo
 
 | Example | The question | The DuckDB feature |
 |---|---|---|
+| `patch_adaptation` | How do the Injects per game follow the patches? | The usage tables per month, no event rows |
+| `unit_effectiveness` | Which units kill the most? | The usage tables per year |
 | `asof_join` | How many workers and how much army when Stimpack finished, in the wins and the losses? | `ASOF JOIN` |
 | `fights` | What were the biggest fights, and where? | Gaps and islands with window functions |
 | `same_person` | Which names has one account used? `SHIN`, `Ragnarok`, `WBGSHIN`... | `list(DISTINCT)` on `player_toon_id` |
@@ -116,7 +115,7 @@ $ S2_IPC_DIR=~/SC2Replays/ipcs uv run python examples/duckdb_examples.py asof_jo
 
 ### Level 0: inspect the snapshot
 
-The seven tables, keyed by `ext_fs_id`; the tracker events identify the players by `player_id`
+The seven event tables and the aggregations of s2protocol-rs 5.1.0, keyed by `ext_fs_id`; the tracker events identify the players by `player_id`
 and `s2.players()` maps them to the names of the details. Before any chart: the row counts, the
 schema, the value counts, the ranges and four sanity checks (unique ids, one winner per game, every
 game dated, every player mapped), then the first measure of every game, its length.
@@ -143,6 +142,11 @@ the map pool as a heatmap.
 
 ![The balance of the matchups per month](./jupyter_notebooks/static/img/level_2_balance_by_month.png)
 ![Workers at 6:00, 8:00 and 10:00 per race and month](./jupyter_notebooks/static/img/level_2_workers_by_month.png)
+
+The usage tables of s2protocol-rs 5.1.0 show how the players adapt to the patches, the dashed lines
+are the first games of each balance version:
+
+![Injects per game per month](./jupyter_notebooks/static/img/level_2_inject_per_month.png)
 
 ### Level 3: trends
 
@@ -233,7 +237,8 @@ $ S2_IPC_DIR=~/SC2Replays/ipcs uv run jupyter nbconvert --to notebook --execute 
 
 The releases in this repo major version are compatible with the s2protocol-rs major versions.
 
-The notebooks read the snapshot of s2protocol-rs 3.6.0 and later (checked on 5.0.2 and 5.1.0),
+The notebooks read the snapshot of s2protocol-rs 3.6.0 and later (checked on 5.0.2 and 5.1.0, the
+aggregations and the sections that use them need 5.1.0),
 partitioned by the day the games were played (`ipcs/year=YYYY/month=MM/day=DD/<file>.arrow`) and
 keyed by `ext_fs_id`. Older snapshots (`.ipc` files, `ext_fs_replay_sha256`) must be generated
 again, i.e. with swarmy's Optimize.

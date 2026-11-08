@@ -32,6 +32,39 @@ pl.Config.set_tbl_hide_dataframe_shape(True)
 RECENT_GAMES = "(SELECT ext_fs_id FROM games ORDER BY ext_datetime DESC LIMIT 300)"
 
 SQL_EXAMPLES = {
+    "patch_adaptation": (
+        "The usage tables per month: how the uses of an ability follow the patches, without the events",
+        """
+        WITH games AS (
+            SELECT period, sum(games) AS games
+            FROM player_usage_month u JOIN races r ON r.race = u.player_race
+            WHERE r.letter = 'Z'
+            GROUP BY ALL
+        ),
+        uses AS (
+            SELECT period, sum(uses) AS uses, min(ext_protocol_version) AS first_version
+            FROM ability_usage_month u JOIN races r ON r.race = u.player_race
+            WHERE r.letter = 'Z' AND ability = 'SpawnLarva.Execute'
+            GROUP BY ALL
+        )
+        SELECT period, games, round(uses / games, 1) AS injects_per_game, first_version
+        FROM games JOIN uses USING (period)
+        WHERE games >= 50
+        ORDER BY period DESC
+        LIMIT 15
+        """,
+    ),
+    "unit_effectiveness": (
+        "The usage tables per year: which units kill the most for what they cost, in a second",
+        """
+        SELECT unit, sum(born) AS made, sum(kills) AS kills, round(sum(kills) / sum(born), 2) AS kills_per_unit,
+               round(100.0 * sum(wins) / sum(games), 1) AS win_rate
+        FROM unit_usage_year
+        WHERE unit IN ('Marine', 'Marauder', 'SiegeTank', 'Zergling', 'Roach', 'Hydralisk', 'Zealot', 'Stalker', 'Colossus')
+        GROUP BY ALL
+        ORDER BY kills_per_unit DESC
+        """,
+    ),
     "columns_regex": (
         "COLUMNS() applies one expression to every column matching a regex",
         """

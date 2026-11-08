@@ -80,3 +80,22 @@ SELECT title, date_trunc('month', ext_datetime) AS month, count(*) AS games
 FROM games
 GROUP BY ALL
 ORDER BY title, month;
+
+-- @query inject_per_month frame=inject_per_month
+-- The Injects per game of the Zerg players per month, from the usage tables of s2protocol-rs 5.1.
+WITH games AS (
+    SELECT period, sum(games) AS games
+    FROM player_usage_month u JOIN races r ON r.race = u.player_race
+    WHERE r.letter = 'Z'
+    GROUP BY ALL
+),
+uses AS (
+    SELECT period, sum(uses) AS uses
+    FROM ability_usage_month u JOIN races r ON r.race = u.player_race
+    WHERE r.letter = 'Z' AND ability = 'SpawnLarva.Execute'
+    GROUP BY ALL
+)
+SELECT period, games, uses, uses / games AS per_game
+FROM games JOIN uses USING (period)
+WHERE games >= 10
+ORDER BY period;
