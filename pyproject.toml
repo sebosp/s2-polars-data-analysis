@@ -14,4 +14,5 @@ dependencies = [
     "polars-ds==0.11.2",
     "pywavelets==1.9.0",
     "pyarrow>=24.0.0",
+    "kaleido>=1.5.0",
 ]

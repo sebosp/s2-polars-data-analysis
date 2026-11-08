@@ -1,3 +1,11 @@
 ipcs/
 
 jupyter_notebooks/.ipynb_checkpoints/
+__pycache__/
+# The map archives swarmy downloads next to the notebooks.
+*.s2ma
+*.s2mv
+# The raw notes of the deep research, the report is in reports/.
+research_notes/
+# The DuckDB database of scripts/duckdb_ui.py, built from the snapshot.
+data/

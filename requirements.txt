@@ -1,7 +1,11 @@
+duckdb==1.5.2
+functime==1.0.0
 jupyter==1.1.1
-jupyterlab==4.5.11
+jupyterlab==4.5.7
+kaleido==1.5.0
+plotly==6.7.0
 plotly-express==0.4.1
-polars==1.31.0
-polars_ds==0.8.2
-functime==0.9.3
-PyWavelets==1.8.0
+polars==1.40.0
+polars-ds==0.11.2
+pyarrow==24.0.0
+pywavelets==1.9.0
