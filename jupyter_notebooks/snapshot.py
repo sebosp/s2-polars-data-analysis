@@ -45,6 +45,7 @@ FILES = [
     "unit_died",
     "cmd_target_point",
     "cmd_target_unit",
+    "cmd_no_target",
 ]
 
 # The aggregations of s2protocol-rs 5.1.0: a row per game, in the directory of each day.
@@ -70,6 +71,16 @@ RACES = {
     }.items()
     for race in races
 }
+
+
+# The minimum games (or months) of the queries are scaled by $S2_MIN_SCALE: the CI checks the
+# notebooks on a snapshot of 142 games with 0.1, where 10 games per matchup and month never happen.
+MIN_SCALE = float(os.environ.get("S2_MIN_SCALE", "1"))
+
+
+def at_least(n: int) -> int:
+    """The minimum `n` of a query, scaled by $S2_MIN_SCALE, `at_least(n)` in the SQL."""
+    return max(1, round(n * MIN_SCALE))
 
 
 def ipc_dir(default: str = "~/SC2Replays/ipcs") -> str:
@@ -272,7 +283,9 @@ def games(ipc_dir: str) -> pl.LazyFrame:
 
 
 def casts(ipc_dir: str) -> pl.LazyFrame:
-    """One row per ability command of both cmd files, i.e. a Psionic Storm or an Inject.
+    """One row per command with an ability of the three cmd files, i.e. a Psionic Storm (aimed at a
+    point), an Inject (at a unit) or a Train, a Stimpack (no target); `target` is `point`, `unit`
+    or `none`. Keep the spells with `ability_name` or `target`, i.e. leave out `Train` and `stop`.
 
     Since s2protocol-rs 5.1.0 a row of the cmd files is a command, `selection_size` has the units
     selected. Before it was a row per unit selected, a Storm commanded with four High Templar was
@@ -283,7 +296,10 @@ def casts(ipc_dir: str) -> pl.LazyFrame:
     columns = ["ext_fs_id", "user_id", "player_name", "ability", "ext_replay_loop", "sequence"]
     return (
         pl.concat(
-            [scan(ipc_dir, "cmd_target_point").select(columns), scan(ipc_dir, "cmd_target_unit").select(columns)]
+            [
+                scan(ipc_dir, f"cmd_{name}").select(columns).with_columns(pl.lit(target).alias("target"))
+                for name, target in [("target_point", "point"), ("target_unit", "unit"), ("no_target", "none")]
+            ]
         )
         .filter(pl.col("ability") != "")
         .unique(["ext_fs_id", "user_id", "sequence", "ext_replay_loop"])
@@ -365,14 +381,17 @@ GAMES_SQL = """
     WHERE g.player_result = 'Win'
 """
 
-# `s2.casts()` as SQL: one row per ability command of both cmd files.
+# `s2.casts()` as SQL: one row per command with an ability of the three cmd files.
 CASTS_SQL = """
-    SELECT ext_fs_id, user_id, player_name, ability, ext_replay_loop, sequence,
+    SELECT ext_fs_id, user_id, player_name, ability, ext_replay_loop, sequence, target,
            string_split(ability, '.')[1] AS ability_name
     FROM (
-        SELECT ext_fs_id, user_id, player_name, ability, ext_replay_loop, sequence FROM cmd_target_point
+        SELECT ext_fs_id, user_id, player_name, ability, ext_replay_loop, sequence, 'point' AS target
+        FROM cmd_target_point
         UNION ALL
-        SELECT ext_fs_id, user_id, player_name, ability, ext_replay_loop, sequence FROM cmd_target_unit
+        SELECT ext_fs_id, user_id, player_name, ability, ext_replay_loop, sequence, 'unit' FROM cmd_target_unit
+        UNION ALL
+        SELECT ext_fs_id, user_id, player_name, ability, ext_replay_loop, sequence, 'none' FROM cmd_no_target
     )
     WHERE ability <> ''
     GROUP BY ALL
@@ -433,9 +452,10 @@ def link_files(con: duckdb.DuckDBPyConnection, ipc_dir: str) -> None:
 
 
 def configure(con: duckdb.DuckDBPyConnection, memory_limit: str = "12GB") -> None:
-    """The settings for queries over a whole snapshot."""
+    """The settings for queries over a whole snapshot, and the `at_least` macro of the SQL."""
     con.execute(f"SET memory_limit = '{memory_limit}'")
     con.execute("SET preserve_insertion_order = false")
+    con.execute(f"CREATE OR REPLACE MACRO at_least(n) AS greatest(1, round(n * {MIN_SCALE}))::BIGINT")
 
 
 def create_views(con: duckdb.DuckDBPyConnection) -> None:

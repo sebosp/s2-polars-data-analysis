@@ -12,11 +12,11 @@ SELECT ext_fs_id FROM games_1v1 WHERE player = (FROM chosen_player) ORDER BY ext
 
 -- The 15 players with the most 1v1 games.
 CREATE OR REPLACE VIEW top_players AS
-SELECT player FROM games_1v1 GROUP BY player HAVING count(*) >= 30 ORDER BY count(*) DESC, player LIMIT 15;
+SELECT player FROM games_1v1 GROUP BY player HAVING count(*) >= at_least(30) ORDER BY count(*) DESC, player LIMIT 15;
 
 -- The 20 most played maps, at least 20 games each.
 CREATE OR REPLACE VIEW top_maps AS
-SELECT title FROM games GROUP BY title HAVING count(*) >= 20 ORDER BY count(*) DESC, title LIMIT 20;
+SELECT title FROM games GROUP BY title HAVING count(*) >= at_least(20) ORDER BY count(*) DESC, title LIMIT 20;
 
 -- The most played map.
 CREATE OR REPLACE VIEW chosen_map AS SELECT title FROM top_maps LIMIT 1;

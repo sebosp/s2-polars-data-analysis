@@ -18,7 +18,7 @@ SELECT
 FROM games
 WHERE title IN (FROM top_maps) AND winner_race <> loser_race AND winner_race <> '?' AND loser_race <> '?'
 GROUP BY ALL
-HAVING count(*) >= 20
+HAVING count(*) >= at_least(20)
 ORDER BY matchup, edge;
 
 -- @query quartiles frame=quartiles_linear

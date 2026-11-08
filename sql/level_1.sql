@@ -52,11 +52,12 @@ WHERE minute >= 2
 GROUP BY player;
 
 -- @query build frame=build
--- The first 15 structures of each player. round_even rounds 2.5 to 2 like polars, round would give 3.
+-- The first 15 structures of each player, at the second they started (floor: polars and DuckDB round
+-- the ties of loop / 22.4 differently).
 SELECT
     p.player,
     b.unit_type_name AS structure,
-    round_even(game_seconds(b.ext_replay_loop), 0) AS seconds,
+    floor(game_seconds(b.ext_replay_loop)) AS seconds,
     row_number() OVER (PARTITION BY p.player ORDER BY b.ext_replay_loop, b.unit_tag_index) AS n
 FROM unit_born b
 JOIN level_1.sides p ON p.player_id = b.control_player_id
@@ -65,7 +66,7 @@ QUALIFY n <= 15;
 
 -- @query researched frame=researched
 -- When each upgrade finished, without the sprays and the rewards.
-SELECT p.player, u.name AS upgrade, round_even(game_seconds(u.ext_replay_loop), 0) AS seconds
+SELECT p.player, u.name AS upgrade, floor(game_seconds(u.ext_replay_loop)) AS seconds
 FROM upgrades u
 JOIN level_1.sides p USING (player_id)
 WHERE u.ext_fs_id = (FROM chosen_game) AND u.ext_replay_loop > 0 AND NOT regexp_matches(u.name, '^(Spray|Reward|GameHeart)');
@@ -95,7 +96,7 @@ GROUP BY ALL;
 
 -- @query deaths frame=deaths
 -- Where the units died, by who killed them.
-SELECT p.player AS killed_by, d.x, d.y, d.unit_died_name AS unit, round_even(game_seconds(d.ext_replay_loop), 0) AS seconds
+SELECT p.player AS killed_by, d.x, d.y, d.unit_died_name AS unit, floor(game_seconds(d.ext_replay_loop)) AS seconds
 FROM unit_died d
 JOIN level_1.sides p ON p.player_id = d.killer_player_id
 WHERE d.ext_fs_id = (FROM chosen_game) AND d.unit_died_name NOT IN (FROM expires);

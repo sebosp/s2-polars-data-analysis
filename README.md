@@ -116,7 +116,7 @@ $ S2_IPC_DIR=~/SC2Replays/ipcs uv run python examples/duckdb_examples.py asof_jo
 
 ### Level 0: inspect the snapshot
 
-The seven event tables and the aggregations of s2protocol-rs 5.1.0, keyed by `ext_fs_id`; the tracker events identify the players by `player_id`
+The eight event tables and the aggregations of s2protocol-rs 5.1.0, keyed by `ext_fs_id`; the tracker events identify the players by `player_id`
 and `s2.players()` maps them to the names of the details. Before any chart: the row counts, the
 schema, the value counts, the ranges and four sanity checks (unique ids, one winner per game, every
 game dated, every player mapped), then the first measure of every game, its length.
@@ -211,7 +211,7 @@ details = s2.scan(IPC_DIR, "details")       # every day as one LazyFrame
 players = s2.players(IPC_DIR)               # each player of each game with its tracker player_id
 games_1v1 = s2.one_vs_one(IPC_DIR)          # the players of the 1v1 games with the matchup, i.e. PvT
 games = s2.games(IPC_DIR)                   # one row per 1v1 game: winner, loser, matchup, minutes
-casts = s2.casts(IPC_DIR)                   # one row per ability command aimed at a point or a unit
+casts = s2.casts(IPC_DIR)                   # one row per command with an ability, `target` point, unit or none
 s2.game_seconds()                           # the game time from ext_replay_loop, 22.4 loops per second
 
 con = s2.duck(IPC_DIR)                      # DuckDB: every table, plus players, games_1v1, games, casts
@@ -220,10 +220,10 @@ s2.same(polars_df, con.sql("..."))          # the same rows, in any order, types
 ```
 
 A snapshot of s2protocol-rs 5.1.0 has twelve files per day. `scan()` and `duck()` read the
-seven the levels use: `details`, `stats`, `upgrades`, `unit_born`, `unit_died`,
-`cmd_target_point` and `cmd_target_unit`. The other five are read with `s2.scan(IPC_DIR, name)`
-too: `unit_init` (the structures started), `cmd_no_target` (the commands without a target: train,
-research, morph, Stimpack), `game_actions` (the commands, camera moves, control groups and
+eight the levels use: `details`, `stats`, `upgrades`, `unit_born`, `unit_died` and the
+three cmd files, `cmd_target_point`, `cmd_target_unit` and `cmd_no_target` (the commands without
+a target: train, research, morph, Stimpack). The other four are read with
+`s2.scan(IPC_DIR, name)` too: `unit_init` (the structures started), `game_actions` (the commands, camera moves, control groups and
 selections per player and minute), `game_selections` (the units selected per minute) and
 `messages` (the chat). A command is a row; `unit_names` has the unit types of its selection and
 `selection_size` how many units it had.

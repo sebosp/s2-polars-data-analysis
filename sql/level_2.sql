@@ -21,7 +21,7 @@ SELECT
 FROM games_1v1
 WHERE race < opponent_race AND race <> '?' AND opponent_race <> '?'
 GROUP BY ALL
-HAVING count(*) >= 10
+HAVING count(*) >= at_least(10)
 ORDER BY matchup, month;
 
 -- @query length frame=length
@@ -29,7 +29,7 @@ ORDER BY matchup, month;
 SELECT matchup, date_trunc('month', ext_datetime) AS month, count(*) AS games, median(minutes) AS median_minutes
 FROM games
 GROUP BY ALL
-HAVING count(*) >= 10
+HAVING count(*) >= at_least(10)
 ORDER BY matchup, month;
 
 -- @query benchmarks frame=benchmarks
@@ -56,7 +56,7 @@ FROM at_minute a
 JOIN players p USING (ext_fs_id, player_id)
 WHERE p.race <> '?'
 GROUP BY ALL
-HAVING count(*) >= 10
+HAVING count(*) >= at_least(10)
 ORDER BY race, minute, month;
 
 -- @query upgrade_timing frame=upgrade_timing
@@ -71,7 +71,7 @@ JOIN players p USING (ext_fs_id, player_id)
 WHERE u.name IN ('Stimpack', 'WarpGateResearch', 'zerglingmovementspeed', 'BlinkTech', 'Charge', 'GlialReconstitution')
   AND u.ext_replay_loop > 0
 GROUP BY ALL
-HAVING count(*) >= 10
+HAVING count(*) >= at_least(10)
 ORDER BY upgrade, month;
 
 -- @query map_months frame=map_months
@@ -97,5 +97,5 @@ uses AS (
 )
 SELECT period, games, uses, uses / games AS per_game
 FROM games JOIN uses USING (period)
-WHERE games >= 10
+WHERE games >= at_least(10)
 ORDER BY period;

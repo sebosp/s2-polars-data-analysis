@@ -8,7 +8,8 @@ UNION ALL SELECT 'upgrades', count(*) FROM upgrades
 UNION ALL SELECT 'unit_born', count(*) FROM unit_born
 UNION ALL SELECT 'unit_died', count(*) FROM unit_died
 UNION ALL SELECT 'cmd_target_point', count(*) FROM cmd_target_point
-UNION ALL SELECT 'cmd_target_unit', count(*) FROM cmd_target_unit;
+UNION ALL SELECT 'cmd_target_unit', count(*) FROM cmd_target_unit
+UNION ALL SELECT 'cmd_no_target', count(*) FROM cmd_no_target;
 
 -- @query span frame=span
 -- How many games, from when to when, on how many maps?
