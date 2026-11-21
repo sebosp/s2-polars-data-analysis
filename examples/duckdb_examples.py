@@ -105,8 +105,7 @@ SQL_EXAMPLES = {
         WITH kills AS (
             SELECT ext_fs_id, x, y, game_seconds(ext_replay_loop) AS seconds
             FROM unit_died
-            WHERE killer_player_id IS NOT NULL AND unit_killer_name <> '' AND ext_fs_id IN {RECENT_GAMES}
-              AND unit_died_name NOT IN ('InvisibleTargetDummy', 'Larva', 'Egg', 'Broodling', 'BroodlingEscort', 'AdeptPhaseShift')
+            WHERE cause = 'killed' AND ext_fs_id IN {RECENT_GAMES}
         ),
         gaps AS (
             SELECT *, seconds - lag(seconds) OVER (PARTITION BY ext_fs_id ORDER BY seconds) AS gap
@@ -120,13 +119,13 @@ SQL_EXAMPLES = {
             g.title, g.winner, g.loser,
             round(min(n.seconds) / 60, 1) AS start_minute,
             round(max(n.seconds) - min(n.seconds)) AS seconds,
-            count(*) AS units_died,
+            count(*) AS units_killed,
             round(avg(n.x)) AS x,
             round(avg(n.y)) AS y
         FROM numbered n
         JOIN games g USING (ext_fs_id)
         GROUP BY g.title, g.winner, g.loser, n.ext_fs_id, n.fight
-        ORDER BY units_died DESC
+        ORDER BY units_killed DESC
         LIMIT 10
         """,
     ),

@@ -2,7 +2,7 @@
 # The checks of the repository on a snapshot: the tests of snapshot.py, every SQL query of the
 # levels against its polars twin, and every notebook executed from top to bottom (the outputs and
 # figures of the repository are not touched). The CI runs it on the test snapshot of the release
-# `test-snapshot-5.1.0`, see .github/workflows/ci.yml.
+# `test-snapshot-6.1.0`, see .github/workflows/ci.yml.
 #
 #     S2_IPC_DIR=~/SC2Replays/ipcs scripts/ci.sh
 set -euo pipefail

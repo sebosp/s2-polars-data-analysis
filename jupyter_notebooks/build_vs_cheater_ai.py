@@ -581,11 +581,10 @@ my_unit_tags = (
 )
 killed_by = (
     s2.scan(IPC_DIR, "unit_died")
-    .filter(pl.col("ext_fs_id").is_in(game_ids) & pl.col("unit_killer_name").is_not_null())
+    # Killed by a computer: not a drone that became a building nor a MULE whose time ran out.
+    .filter(pl.col("ext_fs_id").is_in(game_ids) & (pl.col("cause") == "killed") & pl.col("unit_killer_name").is_not_null())
     .join(my_unit_tags, on=["ext_fs_id", "unit_tag_index", "unit_tag_recycle"], how="semi")
-    .join(games.lazy().select("ext_fs_id", "player_id", "result"), on="ext_fs_id")
-    .filter(pl.col("killer_player_id") != pl.col("player_id"))
-    .filter(~pl.col("unit_died_name").is_in(["Larva", "Egg", "Broodling", "CreepTumorBurrowed", "Changeling"]))
+    .join(games.lazy().select("ext_fs_id", "result"), on="ext_fs_id")
     .group_by("result", "unit_killer_name")
     .agg(pl.len().alias("my_units_killed"))
     .with_columns((pl.col("my_units_killed") / pl.col("my_units_killed").sum().over("result") * 100).round(1).alias("pct_of_my_losses"))
