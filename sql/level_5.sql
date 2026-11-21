@@ -53,7 +53,6 @@ ORDER BY median_third_base;
 -- Where the units die on the most played map, in cells of 8 by 8.
 SELECT (x::INTEGER // 8) * 8 AS cell_x, (y::INTEGER // 8) * 8 AS cell_y, count(*) AS deaths
 FROM unit_died
-WHERE ext_fs_id IN (SELECT ext_fs_id FROM games WHERE title = (FROM chosen_map)) AND killer_player_id IS NOT NULL
-  AND unit_died_name NOT IN (FROM expires)
+WHERE ext_fs_id IN (SELECT ext_fs_id FROM games WHERE title = (FROM chosen_map)) AND cause = 'killed'
 GROUP BY ALL
 ORDER BY deaths DESC;

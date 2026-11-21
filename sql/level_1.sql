@@ -91,7 +91,7 @@ FROM per_minute;
 SELECT p.player AS killer, d.unit_killer_name AS killer_unit, d.unit_died_name AS victim, count(*) AS kills
 FROM unit_died d
 JOIN level_1.sides p ON p.player_id = d.killer_player_id
-WHERE d.ext_fs_id = (FROM chosen_game) AND d.unit_killer_name <> ''
+WHERE d.ext_fs_id = (FROM chosen_game) AND d.cause = 'killed' AND d.unit_killer_name <> ''
 GROUP BY ALL;
 
 -- @query deaths frame=deaths
@@ -99,7 +99,7 @@ GROUP BY ALL;
 SELECT p.player AS killed_by, d.x, d.y, d.unit_died_name AS unit, floor(game_seconds(d.ext_replay_loop)) AS seconds
 FROM unit_died d
 JOIN level_1.sides p ON p.player_id = d.killer_player_id
-WHERE d.ext_fs_id = (FROM chosen_game) AND d.unit_died_name NOT IN (FROM expires);
+WHERE d.ext_fs_id = (FROM chosen_game) AND d.cause = 'killed';
 
 -- @query commands frame=commands
 -- The ability commands per minute. Not the APM of the client: no selections, no camera.

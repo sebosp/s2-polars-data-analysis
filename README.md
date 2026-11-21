@@ -228,6 +228,12 @@ selections per player and minute), `game_selections` (the units selected per min
 `messages` (the chat). A command is a row; `unit_names` has the unit types of its selection and
 `selection_size` how many units it had.
 
+`unit_died` has the `cause` of each death since s2protocol-rs 6.1.0: `killed`, `own_player`,
+`morphed` (a Drone that became a building, a Larva that hatched), `expired` (a MULE, an Adept
+shade), `cancelled`, `hallucination`, `removed`. A kill is `cause = 'killed'`, a loss `killed` or
+`own_player`; a killer alone is not one, a MULE is killed by its own Orbital Command. The levels
+need a 6.1.0 snapshot.
+
 The tracker events (stats, upgrades, unit_born, unit_died) identify the player by `player_id`, the
 details by name, `players()` maps one to the other through unit_born. The races of the details are
 localized, `race` is `T`, `Z`, `P` or `?`. The game commands (`cmd_target_point`,
@@ -247,7 +253,7 @@ $ S2_IPC_DIR=~/SC2Replays/ipcs uv run jupyter nbconvert --to notebook --execute 
 
 The releases in this repo major version are compatible with the s2protocol-rs major versions.
 
-The notebooks read the snapshot of s2protocol-rs 3.6.0 and later (checked on 5.0.2 and 5.1.0, the
+The notebooks read the snapshot of s2protocol-rs 3.6.0 and later (checked on 5.0.2, 5.1.0 and 6.1.0, the
 aggregations and the sections that use them need 5.1.0),
 partitioned by the day the games were played (`ipcs/year=YYYY/month=MM/day=DD/<file>.arrow`) and
 keyed by `ext_fs_id`. Older snapshots (`.ipc` files, `ext_fs_replay_sha256`) must be generated

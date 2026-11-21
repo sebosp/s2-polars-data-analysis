@@ -16,13 +16,13 @@ jobs:
         with:
           version: "0.13.7"
           enable-cache: true
-      # A snapshot of s2protocol-rs 5.1.0 of 142 games: 130 1v1 of eight players over 41 months and
+      # A snapshot of s2protocol-rs 6.1.0 of 142 games: 130 1v1 of eight players over 41 months and
       # 12 games against the Cheater AI, 40 MB, kept as the asset of a release, not in git.
       - name: Download the test snapshot
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download test-snapshot-5.1.0 --pattern ipcs.tar.zst --dir "$RUNNER_TEMP"
+          gh release download test-snapshot-6.1.0 --pattern ipcs.tar.zst --dir "$RUNNER_TEMP"
           tar --zstd -xf "$RUNNER_TEMP/ipcs.tar.zst" -C "$RUNNER_TEMP"
       - name: Install the dependencies
         run: uv sync --locked

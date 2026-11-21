@@ -21,10 +21,6 @@ SELECT title FROM games GROUP BY title HAVING count(*) >= at_least(20) ORDER BY 
 -- The most played map.
 CREATE OR REPLACE VIEW chosen_map AS SELECT title FROM top_maps LIMIT 1;
 
--- Units that expire or die on their own, not because a player killed them.
-CREATE OR REPLACE VIEW expires AS
-SELECT unnest(['InvisibleTargetDummy', 'Larva', 'Egg', 'Broodling', 'BroodlingEscort', 'AdeptPhaseShift', 'ForceField', 'KD8Charge', 'CreepTumorBurrowed']) AS name;
-
 -- Units born with a creator ability that are not army.
 CREATE OR REPLACE VIEW not_army AS
 SELECT unnest(['Probe', 'SCV', 'Drone', 'Overlord', 'Larva', 'Egg', 'MULE', 'Broodling', 'BroodlingEscort', 'Interceptor', 'Changeling', 'AdeptPhaseShift', 'LocustMP', 'AutoTurret', 'KD8Charge', 'ParasiticBombDummy']) AS name;
